@@ -447,88 +447,108 @@ function normalizeRecord(tableName: string, item: any, idx: number): any {
         rol: String(item.rol || 'Operador').trim(),
       };
     case 'produccion':
-      return {
-        ...item,
-        id: itemId,
-        id_plantas: item.id_plantas ? String(item.id_plantas) : item.id_planta ? String(item.id_planta) : '',
-        id_operador: item.id_operador ? String(item.id_operador) : undefined,
-        fecha: String(item.fecha || new Date().toISOString().split('T')[0]),
-        hs_inicio: item.hs_inicio ? String(item.hs_inicio) : undefined,
-        hs_fin: item.hs_fin ? String(item.hs_fin) : undefined,
-        tn_producidas: Number(item.tn_producidas || item.toneladas || 0),
-        hs_parada: Number(item.hs_parada || 0),
-        id_motivo_parada: item.id_motivo_parada ? String(item.id_motivo_parada) : item.id_motivo ? String(item.id_motivo) : undefined,
-        observaciones: item.observaciones ? String(item.observaciones) : item.obs ? String(item.obs) : undefined,
-        id_obras: item.id_obras ? String(item.id_obras) : item.id_obra ? String(item.id_obra) : undefined,
-        id_capa: item.id_capa ? String(item.id_capa) : undefined,
-      };
+      {
+        const pId = item.id_plantas ? String(item.id_plantas) : item.id_planta ? String(item.id_planta) : '';
+        return {
+          ...item,
+          id: itemId,
+          id_plantas: pId,
+          id_planta: pId,
+          id_operador: item.id_operador ? String(item.id_operador) : undefined,
+          fecha: String(item.fecha || new Date().toISOString().split('T')[0]),
+          hs_inicio: item.hs_inicio ? String(item.hs_inicio) : undefined,
+          hs_fin: item.hs_fin ? String(item.hs_fin) : undefined,
+          tn_producidas: Number(item.tn_producidas || item.toneladas || 0),
+          hs_parada: Number(item.hs_parada || 0),
+          id_motivo_parada: item.id_motivo_parada ? String(item.id_motivo_parada) : item.id_motivo ? String(item.id_motivo) : undefined,
+          observaciones: item.observaciones ? String(item.observaciones) : item.obs ? String(item.obs) : undefined,
+          id_obras: item.id_obras ? String(item.id_obras) : item.id_obra ? String(item.id_obra) : undefined,
+          id_capa: item.id_capa ? String(item.id_capa) : undefined,
+        };
+      }
     case 'stock_insumos':
-      return {
-        ...item,
-        id: itemId,
-        descripcion: String(item.descripcion || '').trim(),
-        id_componente: item.id_componente ? String(item.id_componente) : '',
-        id_planta: item.id_planta ? String(item.id_planta) : item.id_plantas ? String(item.id_plantas) : '',
-        cant_minima: Number(item.cant_minima || 0),
-        cant_actual: Number(item.cant_actual || 0),
-      };
+      {
+        const pId = item.id_planta ? String(item.id_planta) : item.id_plantas ? String(item.id_plantas) : '';
+        return {
+          ...item,
+          id: itemId,
+          descripcion: String(item.descripcion || '').trim(),
+          id_componente: item.id_componente ? String(item.id_componente) : '',
+          id_planta: pId,
+          id_plantas: pId,
+          cant_minima: Number(item.cant_minima || 0),
+          cant_actual: Number(item.cant_actual || 0),
+        };
+      }
     case 'mantenimiento':
-      return {
-        ...item,
-        id: itemId,
-        id_plantas: item.id_plantas ? String(item.id_plantas) : item.id_planta ? String(item.id_planta) : '',
-        id_componente: item.id_componente ? String(item.id_componente) : undefined,
-        id_tipomant: item.id_tipomant ? String(item.id_tipomant) : item.id_tipo ? String(item.id_tipo) : undefined,
-        fecha: String(item.fecha || item.fecha_inicio || new Date().toISOString().split('T')[0]),
-        fecha_inicio: item.fecha_inicio ? String(item.fecha_inicio) : undefined,
-        fecha_fin: item.fecha_fin ? String(item.fecha_fin) : undefined,
-        id_repuesto_pedido: item.id_repuesto_pedido ? String(item.id_repuesto_pedido) : undefined,
-        id_estado: item.id_estado ? String(item.id_estado) : undefined,
-        comentarios: item.comentarios ? String(item.comentarios) : item.comentario ? String(item.comentario) : undefined,
-      };
+      {
+        const pId = item.id_plantas ? String(item.id_plantas) : item.id_planta ? String(item.id_planta) : '';
+        return {
+          ...item,
+          id: itemId,
+          id_plantas: pId,
+          id_planta: pId,
+          id_componente: item.id_componente ? String(item.id_componente) : undefined,
+          id_tipomant: item.id_tipomant ? String(item.id_tipomant) : item.id_tipo ? String(item.id_tipo) : undefined,
+          fecha: String(item.fecha || item.fecha_inicio || new Date().toISOString().split('T')[0]),
+          fecha_inicio: item.fecha_inicio ? String(item.fecha_inicio) : undefined,
+          fecha_fin: item.fecha_fin ? String(item.fecha_fin) : undefined,
+          id_repuesto_pedido: item.id_repuesto_pedido ? String(item.id_repuesto_pedido) : undefined,
+          id_estado: item.id_estado ? String(item.id_estado) : undefined,
+          comentarios: item.comentarios ? String(item.comentarios) : item.comentario ? String(item.comentario) : undefined,
+        };
+      }
     case 'tanques':
-      return {
-        ...item,
-        id: itemId,
-        id_plantas: item.id_plantas ? String(item.id_plantas) : item.id_planta ? String(item.id_planta) : '',
-        denominacion: String(item.denominacion || item.nombre || 'Tanque').trim(),
-        marca: item.marca ? String(item.marca) : undefined,
-        tipo: item.tipo ? String(item.tipo) : undefined,
-        capacidad: Number(item.capacidad || 0),
-        descripcion: item.descripcion ? String(item.descripcion) : undefined,
-        stock: Number(item.stock || 0),
-        id_producto: item.id_producto ? String(item.id_producto) : undefined,
-        id_disposicion: item.id_disposicion ? String(item.id_disposicion) : undefined,
-        caldera: Boolean(item.caldera),
-        calefaccionado: Boolean(item.calefaccionado),
-        agitadores: Boolean(item.agitadores),
-        diametro: item.diametro !== undefined && item.diametro !== null ? Number(item.diametro) : undefined,
-        longitud: item.longitud !== undefined && item.longitud !== null ? Number(item.longitud) : undefined,
-        altura_total: item.altura_total !== undefined && item.altura_total !== null ? Number(item.altura_total) : undefined,
-        altura_vacio: item.altura_vacio !== undefined && item.altura_vacio !== null ? Number(item.altura_vacio) : undefined,
-        fecha_actualizacion_vacio: item.fecha_actualizacion_vacio
-          ? String(item.fecha_actualizacion_vacio)
-          : (typeof window !== 'undefined' && localStorage.getItem(`vacio_date_${itemId}`))
-            || (item.fecha_medicion ? String(item.fecha_medicion) : undefined),
-      };
+      {
+        const pId = item.id_plantas ? String(item.id_plantas) : item.id_planta ? String(item.id_planta) : '';
+        return {
+          ...item,
+          id: itemId,
+          id_plantas: pId,
+          id_planta: pId,
+          denominacion: String(item.denominacion || item.nombre || 'Tanque').trim(),
+          marca: item.marca ? String(item.marca) : undefined,
+          tipo: item.tipo ? String(item.tipo) : undefined,
+          capacidad: Number(item.capacidad || 0),
+          descripcion: item.descripcion ? String(item.descripcion) : undefined,
+          stock: Number(item.stock || 0),
+          id_producto: item.id_producto ? String(item.id_producto) : undefined,
+          id_disposicion: item.id_disposicion ? String(item.id_disposicion) : undefined,
+          caldera: Boolean(item.caldera),
+          calefaccionado: Boolean(item.calefaccionado),
+          agitadores: Boolean(item.agitadores),
+          diametro: item.diametro !== undefined && item.diametro !== null ? Number(item.diametro) : undefined,
+          longitud: item.longitud !== undefined && item.longitud !== null ? Number(item.longitud) : undefined,
+          altura_total: item.altura_total !== undefined && item.altura_total !== null ? Number(item.altura_total) : undefined,
+          altura_vacio: item.altura_vacio !== undefined && item.altura_vacio !== null ? Number(item.altura_vacio) : undefined,
+          fecha_actualizacion_vacio: item.fecha_actualizacion_vacio
+            ? String(item.fecha_actualizacion_vacio)
+            : (typeof window !== 'undefined' && localStorage.getItem(`vacio_date_${itemId}`))
+              || (item.fecha_medicion ? String(item.fecha_medicion) : undefined),
+        };
+      }
     case 'silos':
-      return {
-        ...item,
-        id: itemId,
-        id_plantas: item.id_plantas ? String(item.id_plantas) : item.id_planta ? String(item.id_planta) : '',
-        denominacion: String(item.denominacion || item.nombre || 'Silo').trim(),
-        tipo: item.tipo ? String(item.tipo) : undefined,
-        capacidad: Number(item.capacidad || 0),
-        descripcion: item.descripcion ? String(item.descripcion) : undefined,
-        stock: Number(item.stock || 0),
-        id_producto: item.id_producto ? String(item.id_producto) : undefined,
-        id_disposicion: item.id_disposicion ? String(item.id_disposicion) : undefined,
-        altura_vacio: item.altura_vacio !== undefined && item.altura_vacio !== null ? Number(item.altura_vacio) : undefined,
-        fecha_actualizacion_vacio: item.fecha_actualizacion_vacio
-          ? String(item.fecha_actualizacion_vacio)
-          : (typeof window !== 'undefined' && localStorage.getItem(`vacio_date_${itemId}`))
-            || (item.fecha_medicion ? String(item.fecha_medicion) : undefined),
-      };
+      {
+        const pId = item.id_plantas ? String(item.id_plantas) : item.id_planta ? String(item.id_planta) : '';
+        return {
+          ...item,
+          id: itemId,
+          id_plantas: pId,
+          id_planta: pId,
+          denominacion: String(item.denominacion || item.nombre || 'Silo').trim(),
+          tipo: item.tipo ? String(item.tipo) : undefined,
+          capacidad: Number(item.capacidad || 0),
+          descripcion: item.descripcion ? String(item.descripcion) : undefined,
+          stock: Number(item.stock || 0),
+          id_producto: item.id_producto ? String(item.id_producto) : undefined,
+          id_disposicion: item.id_disposicion ? String(item.id_disposicion) : undefined,
+          altura_vacio: item.altura_vacio !== undefined && item.altura_vacio !== null ? Number(item.altura_vacio) : undefined,
+          fecha_actualizacion_vacio: item.fecha_actualizacion_vacio
+            ? String(item.fecha_actualizacion_vacio)
+            : (typeof window !== 'undefined' && localStorage.getItem(`vacio_date_${itemId}`))
+              || (item.fecha_medicion ? String(item.fecha_medicion) : undefined),
+        };
+      }
     case 'componentes':
       return {
         ...item,
@@ -573,7 +593,7 @@ export async function fetchTableData<T>(tableName: string, fallbackData: T[]): P
     // 1. Try Supabase JS client
     try {
       const { data, error } = await supabase.from(cand).select('*');
-      if (!error && data && Array.isArray(data) && data.length > 0) {
+      if (!error && data && Array.isArray(data)) {
         const normalized = data.map((item: any, idx: number) => normalizeRecord(tableName, item, idx));
         localStorage.setItem(`geyt_table_${tableName}`, JSON.stringify(normalized));
         return normalized as unknown as T[];
@@ -584,7 +604,7 @@ export async function fetchTableData<T>(tableName: string, fallbackData: T[]): P
 
     // 2. Try direct REST API fetch
     const restData = await directRestFetch(cand);
-    if (restData && restData.length > 0) {
+    if (restData) {
       const normalized = restData.map((item: any, idx: number) => normalizeRecord(tableName, item, idx));
       localStorage.setItem(`geyt_table_${tableName}`, JSON.stringify(normalized));
       return normalized as unknown as T[];
@@ -640,7 +660,7 @@ export async function saveRecord<T extends { id?: string }>(tableName: string, r
   const candidates = TABLE_CANDIDATES[tableName] || [tableName];
   const primaryCand = candidates[0];
 
-  // Build clean payload without client synthetic prefixes if database manages auto-increment serial or UUID
+  // Build clean payload without non-database client UI properties
   let dbPayload: any = { ...recordToSave };
   delete dbPayload.itemType;
   delete dbPayload.planta;
@@ -655,7 +675,30 @@ export async function saveRecord<T extends { id?: string }>(tableName: string, r
       // ignore
     }
   }
-  if (isSynthetic && typeof dbPayload.id === 'string' && (dbPayload.id.includes('-') || isNaN(Number(dbPayload.id)))) {
+
+  // Handle plant foreign key column name per schema requirement
+  const tableNameLower = tableName.toLowerCase();
+  if (['produccion', 'mantenimiento', 'tanques', 'silos'].includes(tableNameLower)) {
+    if (dbPayload.id_planta && !dbPayload.id_plantas) {
+      dbPayload.id_plantas = dbPayload.id_planta;
+    }
+    delete dbPayload.id_planta;
+  } else if (['stock_insumos', 'repuesto_pedido', 'log'].includes(tableNameLower)) {
+    if (dbPayload.id_plantas && !dbPayload.id_planta) {
+      dbPayload.id_planta = dbPayload.id_plantas;
+    }
+    delete dbPayload.id_plantas;
+  }
+
+  // Convert all empty string values to null so PostgreSQL UUID/numeric types do not fail
+  Object.keys(dbPayload).forEach((key) => {
+    if (dbPayload[key] === '' || dbPayload[key] === undefined) {
+      dbPayload[key] = null;
+    }
+  });
+
+  // Remove client synthetic ID before insert so database assigns primary key
+  if (isSynthetic) {
     delete dbPayload.id;
   }
 
@@ -673,8 +716,10 @@ export async function saveRecord<T extends { id?: string }>(tableName: string, r
         console.warn(`Supabase client insert error on "${primaryCand}":`, error);
       }
     } else {
-      const { error } = await supabase.from(primaryCand).update(dbPayload).eq('id', recordToSave.id);
-      if (!error) {
+      const { data, error } = await supabase.from(primaryCand).update(dbPayload).eq('id', recordToSave.id).select();
+      if (!error && data && data[0]) {
+        savedSuccessfully = true;
+      } else if (!error) {
         savedSuccessfully = true;
       } else {
         const { error: errObra } = await supabase.from(primaryCand).update(dbPayload).eq('id_obra', recordToSave.id);
