@@ -459,9 +459,6 @@ export default function App() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0f172a] text-white flex flex-col justify-center items-center p-4 font-sans">
-        <div className="w-16 h-16 bg-blue-600 text-white rounded flex items-center justify-center border-2 border-blue-400 mb-4 animate-bounce font-black text-xl italic shadow-[4px_4px_0px_#1e293b]">
-          GE
-        </div>
         <div className="flex items-center gap-3 text-blue-400 font-bold text-sm tracking-wider uppercase">
           <Loader2 className="w-5 h-5 animate-spin" />
           <span>Sincronizando Sistema GEyT...</span>

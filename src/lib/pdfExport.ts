@@ -17,6 +17,7 @@ import {
   EstadoRepuestos,
   Disposicion,
   Producto,
+  StockInsumo,
 } from '../types';
 import { calculateTankStock } from '../components/StockTanquesView';
 
@@ -54,6 +55,15 @@ interface PDFStockExportOptions {
   productos: Producto[];
   plantaFiltroNombre?: string;
   categoriaFiltro?: string;
+  emitterName: string;
+}
+
+export interface PDFStockInsumosExportOptions {
+  stockList: StockInsumo[];
+  plantas: Planta[];
+  componentes: Componente[];
+  plantaFiltroNombre?: string;
+  searchTerm?: string;
   emitterName: string;
 }
 
@@ -936,6 +946,425 @@ export const exportStockPDF = async ({
 
   // Save PDF file
   const fileName = `Informe_Stock_${now.toISOString().split('T')[0]}.pdf`;
+  doc.save(fileName);
+};
+
+export const exportStockInsumosPDF = async ({
+  stockList,
+  plantas,
+  componentes,
+  plantaFiltroNombre,
+  searchTerm,
+  emitterName,
+}: PDFStockInsumosExportOptions) => {
+  const doc = new jsPDF('landscape', 'mm', 'a4');
+  const logoBase64 = await getLogoBase64(LOGO_URL);
+
+  const now = new Date();
+  const fechaEmisionStr = `${now.toLocaleDateString('es-AR')} ${now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`;
+
+  // Header banner on first page
+  let startY = 15;
+
+  if (logoBase64) {
+    try {
+      doc.addImage(logoBase64, 'PNG', 14, 10, 40, 14);
+    } catch (e) {
+      console.warn('Error adding logo image to PDF:', e);
+    }
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(15, 23, 42); // slate-900
+  doc.text('INVENTARIO DE INSUMOS Y REPUESTOS CRITICOS', logoBase64 ? 60 : 14, 18);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(71, 85, 105); // slate-600
+
+  // Filter line
+  let filterText = `Plantas: ${plantaFiltroNombre || 'Todas'}`;
+  if (searchTerm && searchTerm.trim()) {
+    filterText += `  |  Filtro de búsqueda: "${searchTerm.trim()}"`;
+  }
+  doc.text(filterText, logoBase64 ? 60 : 14, 24);
+
+  // Emission info right aligned
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Fecha de Emisión: ${fechaEmisionStr}`, 283, 16, { align: 'right' });
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Emitido por: ${emitterName}`, 283, 22, { align: 'right' });
+
+  // Divider line
+  doc.setDrawColor(203, 213, 225); // slate-300
+  doc.setLineWidth(0.5);
+  doc.line(14, 28, 283, 28);
+
+  startY = 34;
+
+  // Group stockList by id_planta
+  const groupedMap: { [plantaId: string]: StockInsumo[] } = {};
+  stockList.forEach((item) => {
+    const pId = item.id_planta || 'unassigned';
+    if (!groupedMap[pId]) {
+      groupedMap[pId] = [];
+    }
+    groupedMap[pId].push(item);
+  });
+
+  // Track global stats
+  let totalItems = 0;
+  let totalLowStockAlerts = 0;
+  let totalStockOk = 0;
+  let totalUnitsToBuy = 0;
+
+  // Process Each Plant
+  const plantEntries = Object.entries(groupedMap);
+
+  plantEntries.forEach(([plantaId, items], index) => {
+    if (items.length === 0) return;
+
+    const plantaObj = plantas.find((p) => p.id === plantaId);
+    const plantName = plantaObj
+      ? `${plantaObj.interno} — ${plantaObj.marca} (${plantaObj.modelo || 'Sin modelo'})`
+      : 'Planta no asignada';
+
+    // Sort items by Componente name, then by descripcion
+    items.sort((a, b) => {
+      const compA = componentes.find((c) => c.id === a.id_componente)?.nmb_componente || '';
+      const compB = componentes.find((c) => c.id === b.id_componente)?.nmb_componente || '';
+      if (compA !== compB) return compA.localeCompare(compB);
+      return a.descripcion.localeCompare(b.descripcion);
+    });
+
+    // Page overflow check for plant block
+    if (startY > 160 && index > 0) {
+      doc.addPage();
+      startY = 15;
+    }
+
+    // Plant Title Block
+    doc.setFillColor(241, 245, 249); // slate-100
+    doc.rect(14, startY, 269, 9, 'F');
+    doc.setDrawColor(148, 163, 184); // slate-400
+    doc.rect(14, startY, 269, 9, 'S');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`PLANTA: ${plantName.toUpperCase()}`, 18, startY + 6);
+
+    const plantLowStockCount = items.filter((i) => Number(i.cant_actual) <= Number(i.cant_minima)).length;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(plantLowStockCount > 0 ? 185 : 30, plantLowStockCount > 0 ? 28 : 58, plantLowStockCount > 0 ? 28 : 138);
+    doc.text(
+      `${items.length} Insumos | ${plantLowStockCount} en Alerta Stock Mínimo`,
+      280,
+      startY + 6,
+      { align: 'right' }
+    );
+
+    startY += 11;
+
+    // Build table rows
+    const tableBody = items.map((item) => {
+      totalItems++;
+      const compObj = componentes.find((c) => c.id === item.id_componente);
+      const compName = compObj ? compObj.nmb_componente : item.id_componente || 'Sin componente';
+      const cantActual = Number(item.cant_actual) || 0;
+      const cantMinima = Number(item.cant_minima) || 0;
+      const isLowStock = cantActual <= cantMinima;
+
+      if (isLowStock) {
+        totalLowStockAlerts++;
+        if (cantActual < cantMinima) {
+          totalUnitsToBuy += (cantMinima - cantActual);
+        }
+      } else {
+        totalStockOk++;
+      }
+
+      const estadoStr = isLowStock ? '¡ALERTA STOCK MÍNIMO!' : 'STOCK ÓPTIMO';
+
+      return [
+        compName,
+        item.descripcion,
+        cantMinima.toString(),
+        cantActual.toString(),
+        estadoStr,
+      ];
+    });
+
+    autoTable(doc, {
+      startY: startY,
+      head: [
+        [
+          'Componente',
+          'Descripción del Insumo / Repuesto',
+          'Cant. Mínima',
+          'Cant. Actual',
+          'Estado Stock',
+        ],
+      ],
+      body: tableBody,
+      margin: { left: 14, right: 14 },
+      styles: {
+        fontSize: 8.5,
+        cellPadding: 2.5,
+        textColor: [30, 41, 59],
+        overflow: 'linebreak',
+      },
+      headStyles: {
+        fillColor: [15, 23, 42], // slate-900
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 8.5,
+      },
+      columnStyles: {
+        0: { cellWidth: 55, fontStyle: 'bold' }, // Componente
+        1: { cellWidth: 105, fontStyle: 'bold' }, // Descripcion
+        2: { cellWidth: 32, halign: 'center' }, // Cant Min
+        3: { cellWidth: 32, halign: 'center', fontStyle: 'bold' }, // Cant Actual
+        4: { cellWidth: 45, halign: 'center', fontStyle: 'bold' }, // Estado
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 4) {
+          const val = data.cell.raw as string;
+          if (val.includes('ALERTA')) {
+            data.cell.styles.textColor = [185, 28, 28]; // red-700
+            data.cell.styles.fillColor = [254, 242, 242]; // red-50
+          } else {
+            data.cell.styles.textColor = [21, 128, 61]; // emerald-700
+          }
+        }
+      },
+      didDrawPage: (data) => {
+        startY = data.cursor ? data.cursor.y + 8 : startY + 20;
+      },
+    });
+
+    startY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 8 : startY + 15;
+  });
+
+  // ==========================================
+  // SEPARATE PAGE FOR "LISTADO A COMPRAR"
+  // ==========================================
+  doc.addPage();
+  startY = 15;
+
+  if (logoBase64) {
+    try {
+      doc.addImage(logoBase64, 'PNG', 14, 10, 40, 14);
+    } catch (e) {
+      console.warn('Error adding logo image to PDF:', e);
+    }
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.setTextColor(185, 28, 28); // red-700
+  doc.text('LISTADO A COMPRAR (REPOSICIÓN DE STOCK MÍNIMO)', logoBase64 ? 60 : 14, 18);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(71, 85, 105);
+  doc.text('Cantidades requeridas de repuestos e insumos para alcanzar el stock mínimo operativo.', logoBase64 ? 60 : 14, 24);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Fecha de Emisión: ${fechaEmisionStr}`, 283, 16, { align: 'right' });
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Emitido por: ${emitterName}`, 283, 22, { align: 'right' });
+
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.5);
+  doc.line(14, 28, 283, 28);
+
+  startY = 34;
+
+  // Filter items that require purchase (cant_actual < cant_minima)
+  const itemsToBuy = stockList.filter(
+    (item) => Number(item.cant_actual) < Number(item.cant_minima)
+  );
+
+  if (itemsToBuy.length === 0) {
+    doc.setFillColor(240, 253, 244); // emerald-50
+    doc.rect(14, startY, 269, 16, 'F');
+    doc.setDrawColor(187, 247, 208); // emerald-200
+    doc.rect(14, startY, 269, 16, 'S');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(21, 128, 61); // emerald-700
+    doc.text(
+      'TODOS LOS INSUMOS Y REPUESTOS SE ENCUENTRAN EN NIVEL ÓPTIMO. NO HAY COMPRAS PENDIENTES.',
+      148.5,
+      startY + 10.5,
+      { align: 'center' }
+    );
+    startY += 22;
+  } else {
+    // Group itemsToBuy by Planta
+    const itemsToBuyByPlanta: { [plantaId: string]: StockInsumo[] } = {};
+    itemsToBuy.forEach((item) => {
+      const pId = item.id_planta || 'unassigned';
+      if (!itemsToBuyByPlanta[pId]) itemsToBuyByPlanta[pId] = [];
+      itemsToBuyByPlanta[pId].push(item);
+    });
+
+    Object.entries(itemsToBuyByPlanta).forEach(([plantaId, items], pIdx) => {
+      const plantaObj = plantas.find((p) => p.id === plantaId);
+      const plantName = plantaObj
+        ? `${plantaObj.interno} — ${plantaObj.marca} (${plantaObj.modelo || 'Sin modelo'})`
+        : 'Planta no asignada';
+
+      // Sort items by Componente name
+      items.sort((a, b) => {
+        const compA = componentes.find((c) => c.id === a.id_componente)?.nmb_componente || '';
+        const compB = componentes.find((c) => c.id === b.id_componente)?.nmb_componente || '';
+        if (compA !== compB) return compA.localeCompare(compB);
+        return a.descripcion.localeCompare(b.descripcion);
+      });
+
+      if (startY > 160 && pIdx > 0) {
+        doc.addPage();
+        startY = 15;
+      }
+
+      // Planta banner for items to buy
+      doc.setFillColor(254, 242, 242); // red-50
+      doc.rect(14, startY, 269, 9, 'F');
+      doc.setDrawColor(252, 165, 165); // red-300
+      doc.rect(14, startY, 269, 9, 'S');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(153, 27, 27); // red-800
+      doc.text(`PLANTA: ${plantName.toUpperCase()} — COMPRAS REQUERIDAS`, 18, startY + 6);
+
+      startY += 11;
+
+      const buyRows = items.map((item) => {
+        const compObj = componentes.find((c) => c.id === item.id_componente);
+        const compName = compObj ? compObj.nmb_componente : item.id_componente || 'Sin componente';
+        const cantActual = Number(item.cant_actual) || 0;
+        const cantMinima = Number(item.cant_minima) || 0;
+        const faltante = cantMinima - cantActual;
+
+        return [
+          compName,
+          item.descripcion,
+          cantActual.toString(),
+          cantMinima.toString(),
+          faltante.toString(),
+        ];
+      });
+
+      autoTable(doc, {
+        startY: startY,
+        head: [
+          [
+            'Componente',
+            'Descripción Insumo / Repuesto a Comprar',
+            'Stock Actual',
+            'Stock Mínimo Requerido',
+            'CANTIDAD A COMPRAR',
+          ],
+        ],
+        body: buyRows,
+        margin: { left: 14, right: 14 },
+        styles: {
+          fontSize: 8.5,
+          cellPadding: 2.5,
+          textColor: [30, 41, 59],
+          overflow: 'linebreak',
+        },
+        headStyles: {
+          fillColor: [153, 27, 27], // red-800
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 8.5,
+        },
+        columnStyles: {
+          0: { cellWidth: 60, fontStyle: 'bold' },
+          1: { cellWidth: 105, fontStyle: 'bold' },
+          2: { cellWidth: 32, halign: 'center' },
+          3: { cellWidth: 32, halign: 'center' },
+          4: { cellWidth: 40, halign: 'center', fontStyle: 'bold', textColor: [185, 28, 28] },
+        },
+        didDrawPage: (data) => {
+          startY = data.cursor ? data.cursor.y + 8 : startY + 20;
+        },
+      });
+
+      startY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 8 : startY + 15;
+    });
+  }
+
+  // Check space for Grand Totals + Signature block
+  if (startY > 140) {
+    doc.addPage();
+    startY = 20;
+  }
+
+  // Summary box
+  doc.setFillColor(248, 250, 252);
+  doc.rect(14, startY, 269, 22, 'F');
+  doc.setDrawColor(203, 213, 225);
+  doc.rect(14, startY, 269, 22, 'S');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text('RESUMEN GENERAL DEL INVENTARIO Y REPOSICIONES:', 18, startY + 7);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(30, 58, 138); // blue-900
+  doc.text(`Total Ítems Registrados: ${totalItems}`, 22, startY + 15);
+
+  doc.setTextColor(21, 128, 61); // emerald-700
+  doc.text(`En Stock Óptimo: ${totalStockOk}`, 105, startY + 15);
+
+  doc.setTextColor(185, 28, 28); // red-700
+  doc.text(`En Alerta Stock Mínimo: ${totalLowStockAlerts}`, 160, startY + 15);
+
+  doc.setTextColor(180, 83, 9); // amber-700
+  doc.text(`Total Unidades a Comprar: ${totalUnitsToBuy}`, 220, startY + 15);
+
+  startY += 30;
+
+  // Signature Block
+  doc.setDrawColor(148, 163, 184);
+  doc.setLineWidth(0.5);
+  doc.line(200, startY + 12, 270, startY + 12);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(15, 23, 42);
+  doc.text('FIRMA / EMISIÓN', 235, startY + 17, { align: 'center' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(71, 85, 105);
+  doc.text(`Emitido por: ${emitterName}`, 235, startY + 22, { align: 'center' });
+  doc.text(`Fecha: ${now.toLocaleDateString('es-AR')}`, 235, startY + 26, { align: 'center' });
+
+  // Add Page Numbers to all pages
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+
+    doc.text('GEyT - Gestión de Plantas', 14, 202);
+    doc.text(`Página ${i} de ${totalPages}`, 283, 202, { align: 'right' });
+  }
+
+  // Save PDF file
+  const fileName = `Informe_Insumos_Repuestos_${now.toISOString().split('T')[0]}.pdf`;
   doc.save(fileName);
 };
 

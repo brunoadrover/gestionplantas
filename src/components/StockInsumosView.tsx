@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { StockInsumo, Planta, Componente } from '../types';
+import { exportStockInsumosPDF } from '../lib/pdfExport';
 import {
   PackageSearch,
   Search,
@@ -11,6 +12,9 @@ import {
   CheckCircle2,
   X,
   Check,
+  Download,
+  Loader2,
+  FileText,
 } from 'lucide-react';
 
 interface StockInsumosViewProps {
@@ -35,6 +39,11 @@ export const StockInsumosView: React.FC<StockInsumosViewProps> = ({
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingStock, setEditingStock] = useState<StockInsumo | null>(null);
+
+  // PDF Export Modal State
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [pdfEmitterName, setPdfEmitterName] = useState('');
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
 
   const [formData, setFormData] = useState<Partial<StockInsumo>>({
     id_planta: userPlantaId || (plantas[0]?.id || ''),
@@ -141,6 +150,38 @@ export const StockInsumosView: React.FC<StockInsumosViewProps> = ({
     setIsModalOpen(false);
   };
 
+  // Export PDF Handler
+  const handleExportPDF = async () => {
+    if (!pdfEmitterName.trim()) return;
+    setIsExportingPDF(true);
+    try {
+      const userPlantaObj = userPlantaId ? plantas.find((p) => p.id === userPlantaId) : null;
+      const plantaFiltroNombre = userPlantaObj
+        ? `${userPlantaObj.interno} — ${userPlantaObj.marca}`
+        : 'Todas las Plantas';
+
+      const itemsToExport = userPlantaId
+        ? stockList.filter((s) => s.id_planta === userPlantaId)
+        : stockList;
+
+      await exportStockInsumosPDF({
+        stockList: itemsToExport,
+        plantas,
+        componentes,
+        plantaFiltroNombre,
+        searchTerm,
+        emitterName: pdfEmitterName.trim(),
+      });
+
+      setIsPdfModalOpen(false);
+      setPdfEmitterName('');
+    } catch (err) {
+      console.error('Error al exportar PDF de Insumos:', err);
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
   // Count total low stock items for alert summary
   const totalLowStockAlerts = useMemo(() => {
     const list = userPlantaId ? stockList.filter((s) => s.id_planta === userPlantaId) : stockList;
@@ -160,15 +201,25 @@ export const StockInsumosView: React.FC<StockInsumosViewProps> = ({
           <div className="h-0.5 w-16 bg-blue-500 my-2"></div>
         </div>
 
-        {isAdmin && (
+        <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={handleOpenNewModal}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[3px_3px_0px_#0f172a] active:translate-x-0.5 active:translate-y-0.5 shrink-0"
+            onClick={() => setIsPdfModalOpen(true)}
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-5 py-3 border-2 border-amber-600 shadow-[3px_3px_0px_#92400e] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center justify-center gap-2 cursor-pointer uppercase text-xs tracking-wider"
           >
-            <Plus className="w-4 h-4 stroke-[3]" />
-            <span>Nuevo Insumo</span>
+            <Download className="w-4 h-4" />
+            <span>Exportar Informe PDF</span>
           </button>
-        )}
+
+          {isAdmin && (
+            <button
+              onClick={handleOpenNewModal}
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[3px_3px_0px_#0f172a] active:translate-x-0.5 active:translate-y-0.5 shrink-0"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>Nuevo Insumo</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Alert Notification Summary Banner if low stock exists */}
@@ -437,6 +488,80 @@ export const StockInsumosView: React.FC<StockInsumosViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* PDF Emitter Modal */}
+      {isPdfModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border-2 border-slate-900 shadow-[8px_8px_0px_#0f172a] max-w-md w-full p-6 space-y-6">
+            <div className="flex items-center justify-between border-b-2 border-slate-100 pb-4">
+              <div className="flex items-center gap-2 text-slate-900">
+                <FileText className="w-6 h-6 text-amber-500" />
+                <h3 className="font-black text-lg uppercase tracking-tight italic">
+                  Exportar Inventario de Insumos
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsPdfModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-xs font-semibold text-slate-600 leading-relaxed">
+                El informe se generará titulado <strong>"INVENTARIO DE INSUMOS Y REPUESTOS CRITICOS"</strong>,
+                separado por Planta y agrupado por Componente. Incluirá en una hoja independiente el listado a comprar para alcanzar el stock mínimo.
+              </p>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-black uppercase text-slate-800 tracking-wider block">
+                  Nombre de quien emite el informe <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. Ing. Juan Pérez"
+                  value={pdfEmitterName}
+                  onChange={(e) => setPdfEmitterName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && pdfEmitterName.trim()) {
+                      handleExportPDF();
+                    }
+                  }}
+                  className="w-full bg-slate-50 border-2 border-slate-300 rounded-lg p-2.5 text-xs font-bold text-slate-900 focus:outline-none focus:border-amber-500"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setIsPdfModalOpen(false)}
+                className="px-4 py-2 border-2 border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs uppercase cursor-pointer transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleExportPDF}
+                disabled={!pdfEmitterName.trim() || isExportingPDF}
+                className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-black px-5 py-2 border-2 border-amber-600 shadow-[2px_2px_0px_#92400e] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all flex items-center gap-2 cursor-pointer text-xs uppercase tracking-wider"
+              >
+                {isExportingPDF ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Generando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <span>Generar PDF</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
