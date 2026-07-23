@@ -1,0 +1,6 @@
+{
+  "name": "Gestión de Plantas - GEyT",
+  "description": "Sistema de gestión para las plantas de asfalto, hormigón y equipos de la Gerencia de Equipos y Transporte (GEyT)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
