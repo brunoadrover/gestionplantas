@@ -58,6 +58,8 @@ import { Building2, Loader2 } from 'lucide-react';
 
 export default function App() {
   const [loading, setLoading] = useState<boolean>(true);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [currentUser, setCurrentUser] = useState<UserLog | null>(null);
 
   // Active View State
@@ -91,81 +93,104 @@ export default function App() {
   >(null);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState<boolean>(false);
 
-  // Load all data from Supabase
-  useEffect(() => {
-    async function loadAllData() {
-      setLoading(true);
-      try {
-        const [
-          uData,
-          tData,
-          cData,
-          dData,
-          eData,
-          erData,
-          cpData,
-          mData,
-          oData,
-          opData,
-          prData,
-          tmData,
-          pData,
-          stData,
-          prodData,
-          rpData,
-          mantData,
-          tqData,
-          slData,
-        ] = await Promise.all([
-          fetchTableData<UserLog>('log', DEFAULT_USERS),
-          fetchTableData<TipoPlanta>('tipo', DEFAULT_TIPOS),
-          fetchTableData<Componente>('componentes', DEFAULT_COMPONENTES),
-          fetchTableData<Disposicion>('disposicion', DEFAULT_DISPOSICIONES),
-          fetchTableData<Estado>('estado', DEFAULT_ESTADOS),
-          fetchTableData<EstadoRepuestos>('estadorepuestos', DEFAULT_ESTADOS_REP),
-          fetchTableData<any>('capa', DEFAULT_CAPAS),
-          fetchTableData<MotivoParada>('motivo_parada', DEFAULT_MOTIVOS),
-          fetchTableData<Obra>('obras', DEFAULT_OBRAS),
-          fetchTableData<Operador>('operador', DEFAULT_OPERADORES),
-          fetchTableData<Producto>('producto', DEFAULT_PRODUCTOS),
-          fetchTableData<TipoMant>('tipomant', DEFAULT_TIPOMANT),
-          fetchTableData<Planta>('plantas', DEFAULT_PLANTAS),
-          fetchTableData<StockInsumo>('stock_insumos', DEFAULT_STOCK),
-          fetchTableData<Produccion>('produccion', DEFAULT_PRODUCCION),
-          fetchTableData<RepuestoPedido>('repuesto_pedido', DEFAULT_REPUESTOS),
-          fetchTableData<Mantenimiento>('mantenimiento', DEFAULT_MANTENIMIENTO),
-          fetchTableData<Tanque>('tanques', DEFAULT_TANQUES),
-          fetchTableData<Silo>('silos', DEFAULT_SILOS),
-        ]);
+  const ALL_TABLES = [
+    'log', 'tipo', 'componentes', 'disposicion', 'estado', 'estadorepuestos',
+    'capa', 'motivo_parada', 'obras', 'operador', 'producto', 'tipomant',
+    'plantas', 'stock_insumos', 'produccion', 'repuesto_pedido', 'mantenimiento',
+    'tanques', 'silos',
+  ];
 
-        setUsers(uData);
-        setTiposPlanta(tData);
-        setComponentes(cData);
-        setDisposiciones(dData);
-        setEstados(eData);
-        setEstadosRepuestos(erData);
-        setCapas(cpData);
-        setMotivos(mData);
-        setObras(oData);
-        setOperadores(opData);
-        setProductos(prData);
-        setTipomantList(tmData);
-        setPlantas(pData);
-        setStockList(stData);
-        setProduccionList(prodData);
-        setRepuestosList(rpData);
-        setMantenimientoList(mantData);
-        setTanques(tqData);
-        setSilos(slData);
-      } catch (error) {
-        console.error('Error loading database tables:', error);
-      } finally {
-        setLoading(false);
-      }
+  const getTablesForView = (view: ViewType): string[] => {
+    switch (view) {
+      case 'PLANTAS':
+        return ['plantas', 'obras', 'tipo', 'silos', 'tanques', 'stock_insumos', 'produccion'];
+      case 'PRODUCCION':
+        return ['produccion', 'plantas', 'operador', 'obras', 'motivo_parada', 'capa'];
+      case 'MANTENIMIENTO':
+        return ['mantenimiento', 'plantas', 'componentes', 'tipomant', 'estado', 'repuesto_pedido', 'estadorepuestos'];
+      case 'STOCK':
+        return ['stock_insumos', 'plantas', 'componentes'];
+      case 'STOCK_TANQUES':
+        return ['tanques', 'silos', 'plantas', 'disposicion', 'producto'];
+      default:
+        return ['plantas'];
     }
+  };
 
-    loadAllData();
+  // Synchronize specific database tables directly with Supabase
+  const refreshTables = async (tableNames: string[], showLoadingScreen: boolean = false) => {
+    if (showLoadingScreen) setLoading(true);
+    setIsSyncing(true);
+    try {
+      const promises: Promise<any>[] = [];
+      const tableKeys = new Set(tableNames);
+
+      if (tableKeys.has('log')) promises.push(fetchTableData<UserLog>('log', DEFAULT_USERS).then(setUsers));
+      if (tableKeys.has('tipo')) promises.push(fetchTableData<TipoPlanta>('tipo', DEFAULT_TIPOS).then(setTiposPlanta));
+      if (tableKeys.has('componentes')) promises.push(fetchTableData<Componente>('componentes', DEFAULT_COMPONENTES).then(setComponentes));
+      if (tableKeys.has('disposicion')) promises.push(fetchTableData<Disposicion>('disposicion', DEFAULT_DISPOSICIONES).then(setDisposiciones));
+      if (tableKeys.has('estado')) promises.push(fetchTableData<Estado>('estado', DEFAULT_ESTADOS).then(setEstados));
+      if (tableKeys.has('estadorepuestos')) promises.push(fetchTableData<EstadoRepuestos>('estadorepuestos', DEFAULT_ESTADOS_REP).then(setEstadosRepuestos));
+      if (tableKeys.has('capa')) promises.push(fetchTableData<any>('capa', DEFAULT_CAPAS).then(setCapas));
+      if (tableKeys.has('motivo_parada')) promises.push(fetchTableData<MotivoParada>('motivo_parada', DEFAULT_MOTIVOS).then(setMotivos));
+      if (tableKeys.has('obras')) promises.push(fetchTableData<Obra>('obras', DEFAULT_OBRAS).then(setObras));
+      if (tableKeys.has('operador')) promises.push(fetchTableData<Operador>('operador', DEFAULT_OPERADORES).then(setOperadores));
+      if (tableKeys.has('producto')) promises.push(fetchTableData<Producto>('producto', DEFAULT_PRODUCTOS).then(setProductos));
+      if (tableKeys.has('tipomant')) promises.push(fetchTableData<TipoMant>('tipomant', DEFAULT_TIPOMANT).then(setTipomantList));
+      if (tableKeys.has('plantas')) promises.push(fetchTableData<Planta>('plantas', DEFAULT_PLANTAS).then(setPlantas));
+      if (tableKeys.has('stock_insumos')) promises.push(fetchTableData<StockInsumo>('stock_insumos', DEFAULT_STOCK).then(setStockList));
+      if (tableKeys.has('produccion')) promises.push(fetchTableData<Produccion>('produccion', DEFAULT_PRODUCCION).then(setProduccionList));
+      if (tableKeys.has('repuesto_pedido')) promises.push(fetchTableData<RepuestoPedido>('repuesto_pedido', DEFAULT_REPUESTOS).then(setRepuestosList));
+      if (tableKeys.has('mantenimiento')) promises.push(fetchTableData<Mantenimiento>('mantenimiento', DEFAULT_MANTENIMIENTO).then(setMantenimientoList));
+      if (tableKeys.has('tanques')) promises.push(fetchTableData<Tanque>('tanques', DEFAULT_TANQUES).then(setTanques));
+      if (tableKeys.has('silos')) promises.push(fetchTableData<Silo>('silos', DEFAULT_SILOS).then(setSilos));
+
+      await Promise.all(promises);
+      setLastSyncTime(new Date());
+    } catch (error) {
+      console.error('Error sincronizando con Supabase:', error);
+    } finally {
+      setIsSyncing(false);
+      if (showLoadingScreen) setLoading(false);
+    }
+  };
+
+  // Initial database sync on app mount
+  useEffect(() => {
+    refreshTables(ALL_TABLES, true);
   }, []);
+
+  // Per-query database sync when changing view tab
+  useEffect(() => {
+    if (!loading) {
+      refreshTables(getTablesForView(activeView));
+    }
+  }, [activeView]);
+
+  // Sync on window focus / tab re-entry
+  useEffect(() => {
+    const handleFocus = () => {
+      if (!loading) {
+        refreshTables(getTablesForView(activeView));
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [activeView, loading]);
+
+  // Sync when entity modal opens
+  useEffect(() => {
+    if (activeEntityModal && !loading) {
+      refreshTables(['plantas', 'tanques', 'silos', 'operador', 'obras', 'stock_insumos', 'disposicion', 'producto']);
+    }
+  }, [activeEntityModal]);
+
+  // Sync when config modal opens
+  useEffect(() => {
+    if (isConfigModalOpen && !loading) {
+      refreshTables(['log', 'tipo', 'componentes', 'motivo_parada', 'capa', 'tipomant', 'plantas']);
+    }
+  }, [isConfigModalOpen]);
 
   // Handle Login
   const handleLogin = (user: UserLog) => {
@@ -193,11 +218,13 @@ export default function App() {
       }
       return [saved, ...prev];
     });
+    refreshTables(['plantas']);
   };
 
   const handleDeletePlanta = async (id: string) => {
     await deleteRecord('plantas', id);
     setPlantas((prev) => prev.filter((p) => p.id !== id));
+    refreshTables(['plantas']);
   };
 
   const handleSaveProduccion = async (prod: Produccion) => {
@@ -211,11 +238,13 @@ export default function App() {
       }
       return [saved, ...prev];
     });
+    refreshTables(['produccion', 'plantas']);
   };
 
   const handleDeleteProduccion = async (id: string) => {
     await deleteRecord('produccion', id);
     setProduccionList((prev) => prev.filter((p) => p.id !== id));
+    refreshTables(['produccion']);
   };
 
   const handleSaveMantenimiento = async (m: Mantenimiento) => {
@@ -229,11 +258,13 @@ export default function App() {
       }
       return [saved, ...prev];
     });
+    refreshTables(['mantenimiento']);
   };
 
   const handleDeleteMantenimiento = async (id: string) => {
     await deleteRecord('mantenimiento', id);
     setMantenimientoList((prev) => prev.filter((m) => m.id !== id));
+    refreshTables(['mantenimiento']);
   };
 
   const handleSaveStock = async (st: StockInsumo) => {
@@ -247,11 +278,13 @@ export default function App() {
       }
       return [saved, ...prev];
     });
+    refreshTables(['stock_insumos']);
   };
 
   const handleDeleteStock = async (id: string) => {
     await deleteRecord('stock_insumos', id);
     setStockList((prev) => prev.filter((st) => st.id !== id));
+    refreshTables(['stock_insumos']);
   };
 
   const handleSaveRepuesto = async (rp: RepuestoPedido) => {
@@ -265,6 +298,7 @@ export default function App() {
       }
       return [saved, ...prev];
     });
+    refreshTables(['repuesto_pedido']);
   };
 
   const handleSaveTanque = async (t: Tanque) => {
@@ -278,11 +312,13 @@ export default function App() {
       }
       return [saved, ...prev];
     });
+    refreshTables(['tanques']);
   };
 
   const handleDeleteTanque = async (id: string) => {
     await deleteRecord('tanques', id);
     setTanques((prev) => prev.filter((t) => t.id !== id));
+    refreshTables(['tanques']);
   };
 
   const handleSaveSilo = async (s: Silo) => {
@@ -296,11 +332,13 @@ export default function App() {
       }
       return [saved, ...prev];
     });
+    refreshTables(['silos']);
   };
 
   const handleDeleteSilo = async (id: string) => {
     await deleteRecord('silos', id);
     setSilos((prev) => prev.filter((s) => s.id !== id));
+    refreshTables(['silos']);
   };
 
   const handleSaveOperador = async (op: Operador) => {
@@ -314,11 +352,13 @@ export default function App() {
       }
       return [saved, ...prev];
     });
+    refreshTables(['operador']);
   };
 
   const handleDeleteOperador = async (id: string) => {
     await deleteRecord('operador', id);
     setOperadores((prev) => prev.filter((op) => op.id !== id));
+    refreshTables(['operador']);
   };
 
   const handleSaveObra = async (ob: Obra) => {
@@ -332,11 +372,13 @@ export default function App() {
       }
       return [saved, ...prev];
     });
+    refreshTables(['obras']);
   };
 
   const handleDeleteObra = async (id: string) => {
     await deleteRecord('obras', id);
     setObras((prev) => prev.filter((o) => o.id !== id));
+    refreshTables(['obras']);
   };
 
   // Configuraciones handlers
@@ -351,11 +393,13 @@ export default function App() {
       }
       return [saved, ...prev];
     });
+    refreshTables(['log']);
   };
 
   const handleDeleteUser = async (id: string) => {
     await deleteRecord('log', id);
     setUsers((prev) => prev.filter((u) => u.id !== id));
+    refreshTables(['log']);
   };
 
   const handleSaveTipo = async (t: TipoPlanta) => {
@@ -369,11 +413,13 @@ export default function App() {
       }
       return [saved, ...prev];
     });
+    refreshTables(['tipo']);
   };
 
   const handleDeleteTipo = async (id: string) => {
     await deleteRecord('tipo', id);
     setTiposPlanta((prev) => prev.filter((t) => t.id !== id));
+    refreshTables(['tipo']);
   };
 
   const handleSaveComponente = async (c: Componente) => {
@@ -387,11 +433,13 @@ export default function App() {
       }
       return [saved, ...prev];
     });
+    refreshTables(['componentes']);
   };
 
   const handleDeleteComponente = async (id: string) => {
     await deleteRecord('componentes', id);
     setComponentes((prev) => prev.filter((c) => c.id !== id));
+    refreshTables(['componentes']);
   };
 
   const handleSaveMotivo = async (m: MotivoParada) => {
@@ -405,11 +453,13 @@ export default function App() {
       }
       return [saved, ...prev];
     });
+    refreshTables(['motivo_parada']);
   };
 
   const handleDeleteMotivo = async (id: string) => {
     await deleteRecord('motivo_parada', id);
     setMotivos((prev) => prev.filter((m) => m.id !== id));
+    refreshTables(['motivo_parada']);
   };
 
   const handleSaveCapa = async (cp: any) => {
@@ -423,11 +473,13 @@ export default function App() {
       }
       return [saved, ...prev];
     });
+    refreshTables(['capa']);
   };
 
   const handleDeleteCapa = async (id: string) => {
     await deleteRecord('capa', id);
     setCapas((prev) => prev.filter((c) => c.id !== id));
+    refreshTables(['capa']);
   };
 
   const handleSaveTipomant = async (tm: TipoMant) => {
@@ -441,11 +493,13 @@ export default function App() {
       }
       return [saved, ...prev];
     });
+    refreshTables(['tipomant']);
   };
 
   const handleDeleteTipomant = async (id: string) => {
     await deleteRecord('tipomant', id);
     setTipomantList((prev) => prev.filter((t) => t.id !== id));
+    refreshTables(['tipomant']);
   };
 
   // Low stock count alert calculation
@@ -484,6 +538,9 @@ export default function App() {
         setActiveView={setActiveView}
         onLogout={handleLogout}
         userPlanta={userPlantaObj}
+        isSyncing={isSyncing}
+        onSync={() => refreshTables(ALL_TABLES)}
+        lastSyncTime={lastSyncTime}
       />
 
       {/* Main Layout Area */}
@@ -597,7 +654,15 @@ export default function App() {
             </span>
           )}
           <span className="w-[1px] h-3 bg-slate-700"></span>
-          <span className="text-slate-300">Base de Datos: Conectada</span>
+          <span className="flex items-center gap-1.5 text-slate-300">
+            <span className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-400 animate-ping' : 'bg-emerald-500'}`}></span>
+            Base de Datos: {isSyncing ? 'Sincronizando...' : 'Conectada'}
+            {lastSyncTime && (
+              <span className="text-slate-500 text-[9px] font-normal lowercase ml-1">
+                ({lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })})
+              </span>
+            )}
+          </span>
         </div>
         <div className="text-slate-500 font-medium tracking-widest hidden sm:block">
           SISTEMA DE GESTIÓN DE PLANTAS — GEyT v2.4.0

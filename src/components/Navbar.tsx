@@ -1,6 +1,6 @@
 import React from 'react';
 import { UserLog, Planta } from '../types';
-import { Building2, LogOut, Shield, User as UserIcon, Factory, Wrench, Activity, Cylinder } from 'lucide-react';
+import { Building2, LogOut, Shield, User as UserIcon, Factory, Wrench, Activity, Cylinder, RefreshCw } from 'lucide-react';
 
 export type ViewType = 'PLANTAS' | 'PRODUCCION' | 'MANTENIMIENTO' | 'STOCK' | 'STOCK_TANQUES';
 
@@ -10,6 +10,9 @@ interface NavbarProps {
   setActiveView: (view: ViewType) => void;
   onLogout: () => void;
   userPlanta?: Planta;
+  isSyncing?: boolean;
+  onSync?: () => void;
+  lastSyncTime?: Date | null;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -18,6 +21,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   setActiveView,
   onLogout,
   userPlanta,
+  isSyncing = false,
+  onSync,
+  lastSyncTime,
 }) => {
   const isAdmin = currentUser.rol.toUpperCase() === 'ADMIN';
 
@@ -88,8 +94,23 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </div>
 
-          {/* User Profile & Logout */}
-          <div className="flex items-center gap-4">
+          {/* User Profile, Sync Button & Logout */}
+          <div className="flex items-center gap-3 sm:gap-4">
+            {/* Sync Button */}
+            {onSync && (
+              <button
+                onClick={onSync}
+                disabled={isSyncing}
+                title="Sincronizar y actualizar consulta con Supabase"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-blue-600' : 'text-slate-500'}`} />
+                <span className="hidden sm:inline uppercase text-[10px] tracking-wider font-bold">
+                  {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
+                </span>
+              </button>
+            )}
+
             <div className="flex flex-col items-end">
               <span className="text-xs font-black text-slate-900 flex items-center gap-1.5 uppercase italic">
                 {isAdmin ? <Shield className="w-3.5 h-3.5 text-blue-600" /> : <UserIcon className="w-3.5 h-3.5 text-sky-600" />}
