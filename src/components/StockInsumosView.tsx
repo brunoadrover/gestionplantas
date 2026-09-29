@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { StockInsumo, Planta, Componente } from '../types';
 import { exportStockInsumosPDF } from '../lib/pdfExport';
+import { exportStockInsumosExcel } from '../lib/excelExport';
 import {
   PackageSearch,
   Search,
@@ -15,6 +16,7 @@ import {
   Download,
   Loader2,
   FileText,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 interface StockInsumosViewProps {
@@ -40,10 +42,11 @@ export const StockInsumosView: React.FC<StockInsumosViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingStock, setEditingStock] = useState<StockInsumo | null>(null);
 
-  // PDF Export Modal State
-  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  // Export Modal State
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'excel'>('pdf');
   const [pdfEmitterName, setPdfEmitterName] = useState('');
-  const [isExportingPDF, setIsExportingPDF] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const [formData, setFormData] = useState<Partial<StockInsumo>>({
     id_planta: userPlantaId || (plantas[0]?.id || ''),
@@ -150,10 +153,10 @@ export const StockInsumosView: React.FC<StockInsumosViewProps> = ({
     setIsModalOpen(false);
   };
 
-  // Export PDF Handler
-  const handleExportPDF = async () => {
+  // Export Handler (PDF / Excel)
+  const handleExport = async () => {
     if (!pdfEmitterName.trim()) return;
-    setIsExportingPDF(true);
+    setIsExporting(true);
     try {
       const userPlantaObj = userPlantaId ? plantas.find((p) => p.id === userPlantaId) : null;
       const plantaFiltroNombre = userPlantaObj
@@ -164,21 +167,33 @@ export const StockInsumosView: React.FC<StockInsumosViewProps> = ({
         ? stockList.filter((s) => s.id_planta === userPlantaId)
         : stockList;
 
-      await exportStockInsumosPDF({
-        stockList: itemsToExport,
-        plantas,
-        componentes,
-        plantaFiltroNombre,
-        searchTerm,
-        emitterName: pdfEmitterName.trim(),
-      });
+      if (exportFormat === 'pdf') {
+        await exportStockInsumosPDF({
+          stockList: itemsToExport,
+          plantas,
+          componentes,
+          plantaFiltroNombre,
+          searchTerm,
+          emitterName: pdfEmitterName.trim(),
+        });
+      } else {
+        await exportStockInsumosExcel({
+          stockList: itemsToExport,
+          plantas,
+          componentes,
+          plantaFiltroNombre,
+          searchTerm,
+          emitterName: pdfEmitterName.trim(),
+        });
+      }
 
-      setIsPdfModalOpen(false);
+      setIsExportModalOpen(false);
       setPdfEmitterName('');
     } catch (err) {
-      console.error('Error al exportar PDF de Insumos:', err);
+      console.error('Error al exportar reporte de Insumos:', err);
+      alert('Ocurrió un error al generar el archivo.');
     } finally {
-      setIsExportingPDF(false);
+      setIsExporting(false);
     }
   };
 
@@ -203,11 +218,11 @@ export const StockInsumosView: React.FC<StockInsumosViewProps> = ({
 
         <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={() => setIsPdfModalOpen(true)}
+            onClick={() => setIsExportModalOpen(true)}
             className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-5 py-3 border-2 border-amber-600 shadow-[3px_3px_0px_#92400e] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center justify-center gap-2 cursor-pointer uppercase text-xs tracking-wider"
           >
             <Download className="w-4 h-4" />
-            <span>Exportar Informe PDF</span>
+            <span>Exportar Informe (PDF / Excel)</span>
           </button>
 
           {isAdmin && (
@@ -492,19 +507,19 @@ export const StockInsumosView: React.FC<StockInsumosViewProps> = ({
         </div>
       )}
 
-      {/* PDF Emitter Modal */}
-      {isPdfModalOpen && (
+      {/* Export Modal */}
+      {isExportModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border-2 border-slate-900 shadow-[8px_8px_0px_#0f172a] max-w-md w-full p-6 space-y-6">
-            <div className="flex items-center justify-between border-b-2 border-slate-100 pb-4">
+          <div className="bg-white border-2 border-slate-900 shadow-[8px_8px_0px_#0f172a] max-w-md w-full p-6 space-y-5">
+            <div className="flex items-center justify-between border-b-2 border-slate-100 pb-3">
               <div className="flex items-center gap-2 text-slate-900">
-                <FileText className="w-6 h-6 text-amber-500" />
-                <h3 className="font-black text-lg uppercase tracking-tight italic">
+                <Download className="w-5 h-5 text-amber-500" />
+                <h3 className="font-black text-base uppercase tracking-tight italic">
                   Exportar Inventario de Insumos
                 </h3>
               </div>
               <button
-                onClick={() => setIsPdfModalOpen(false)}
+                onClick={() => setIsExportModalOpen(false)}
                 className="text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -512,10 +527,59 @@ export const StockInsumosView: React.FC<StockInsumosViewProps> = ({
             </div>
 
             <div className="space-y-4">
-              <p className="text-xs font-semibold text-slate-600 leading-relaxed">
-                El informe se generará titulado <strong>"INVENTARIO DE INSUMOS Y REPUESTOS CRITICOS"</strong>,
-                separado por Planta y agrupado por Componente. Incluirá en una hoja independiente el listado a comprar para alcanzar el stock mínimo.
-              </p>
+              {/* Format selection */}
+              <div>
+                <label className="block text-[11px] font-black uppercase text-slate-700 mb-2">
+                  Seleccione el Formato de Exportación *
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setExportFormat('pdf')}
+                    className={`p-3 border-2 text-left flex flex-col gap-1 transition-all cursor-pointer ${
+                      exportFormat === 'pdf'
+                        ? 'border-blue-600 bg-blue-50/70 text-blue-950 ring-1 ring-blue-600'
+                        : 'border-slate-200 hover:border-slate-300 bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-black text-xs uppercase">
+                        <FileText className="w-4 h-4 text-blue-600" />
+                        <span>PDF</span>
+                      </div>
+                      {exportFormat === 'pdf' && (
+                        <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-medium">
+                      Documento formal listo para impresión
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setExportFormat('excel')}
+                    className={`p-3 border-2 text-left flex flex-col gap-1 transition-all cursor-pointer ${
+                      exportFormat === 'excel'
+                        ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 ring-1 ring-emerald-600'
+                        : 'border-slate-200 hover:border-slate-300 bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-black text-xs uppercase">
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                        <span>Excel</span>
+                      </div>
+                      {exportFormat === 'excel' && (
+                        <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-medium">
+                      Planilla con hojas de Stock y Compras
+                    </span>
+                  </button>
+                </div>
+              </div>
 
               <div className="space-y-1.5">
                 <label className="text-xs font-black uppercase text-slate-800 tracking-wider block">
@@ -528,7 +592,7 @@ export const StockInsumosView: React.FC<StockInsumosViewProps> = ({
                   onChange={(e) => setPdfEmitterName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && pdfEmitterName.trim()) {
-                      handleExportPDF();
+                      handleExport();
                     }
                   }}
                   className="w-full bg-slate-50 border-2 border-slate-300 rounded-lg p-2.5 text-xs font-bold text-slate-900 focus:outline-none focus:border-amber-500"
@@ -539,25 +603,33 @@ export const StockInsumosView: React.FC<StockInsumosViewProps> = ({
 
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
-                onClick={() => setIsPdfModalOpen(false)}
+                onClick={() => setIsExportModalOpen(false)}
                 className="px-4 py-2 border-2 border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs uppercase cursor-pointer transition-colors"
               >
                 Cancelar
               </button>
               <button
-                onClick={handleExportPDF}
-                disabled={!pdfEmitterName.trim() || isExportingPDF}
-                className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-black px-5 py-2 border-2 border-amber-600 shadow-[2px_2px_0px_#92400e] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all flex items-center gap-2 cursor-pointer text-xs uppercase tracking-wider"
+                onClick={handleExport}
+                disabled={!pdfEmitterName.trim() || isExporting}
+                className={`px-5 py-2.5 font-black text-xs uppercase tracking-wider flex items-center gap-2 cursor-pointer disabled:opacity-50 transition-all ${
+                  exportFormat === 'pdf'
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-[2px_2px_0px_#0f172a]'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-[2px_2px_0px_#0f172a]'
+                }`}
               >
-                {isExportingPDF ? (
+                {isExporting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Generando...</span>
+                    <span>Generando {exportFormat === 'pdf' ? 'PDF' : 'Excel'}...</span>
                   </>
                 ) : (
                   <>
-                    <Download className="w-4 h-4" />
-                    <span>Generar PDF</span>
+                    {exportFormat === 'pdf' ? (
+                      <Download className="w-4 h-4" />
+                    ) : (
+                      <FileSpreadsheet className="w-4 h-4" />
+                    )}
+                    <span>Descargar {exportFormat === 'pdf' ? 'PDF' : 'Excel (.xlsx)'}</span>
                   </>
                 )}
               </button>

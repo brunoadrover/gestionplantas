@@ -18,6 +18,7 @@ import {
   HardHat,
   Layers,
   FileText,
+  FileSpreadsheet,
   UserCheck,
   Edit2,
   Trash2,
@@ -28,6 +29,7 @@ import {
   Download,
 } from 'lucide-react';
 import { exportProduccionPDF } from '../lib/pdfExport';
+import { exportProduccionExcel } from '../lib/excelExport';
 
 interface ProduccionViewProps {
   produccionList: Produccion[];
@@ -76,10 +78,11 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({
     calderista_4: '',
   });
 
-  // PDF Modal & Emitter state
-  const [isPdfModalOpen, setIsPdfModalOpen] = useState<boolean>(false);
+  // Export Modal & Emitter state
+  const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'excel'>('pdf');
   const [pdfEmitterName, setPdfEmitterName] = useState<string>('');
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState<boolean>(false);
+  const [isExporting, setIsExporting] = useState<boolean>(false);
 
   // Filter and sort records from newest to oldest
   const filteredRecords = useMemo(() => {
@@ -226,14 +229,14 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({
           <div className="h-0.5 w-16 bg-blue-500 my-2"></div>
         </div>
 
-        {/* Action Buttons: New Record and PDF Export */}
+        {/* Action Buttons: New Record and Export */}
         <div className="flex flex-wrap items-center gap-2.5">
           <button
-            onClick={() => setIsPdfModalOpen(true)}
+            onClick={() => setIsExportModalOpen(true)}
             className="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-white font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[3px_3px_0px_#0f172a] border border-slate-700 active:translate-x-0.5 active:translate-y-0.5 shrink-0"
           >
-            <Download className="w-4 h-4 text-blue-400 stroke-[2.5]" />
-            <span>Exportar Informe PDF</span>
+            <Download className="w-4 h-4 text-emerald-400 stroke-[2.5]" />
+            <span>Exportar Informe (PDF / Excel)</span>
           </button>
 
           <button
@@ -764,27 +767,23 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({
         </div>
       )}
 
-      {/* Modal for PDF Emitter Name */}
-      {isPdfModalOpen && (
+      {/* Modal for PDF / Excel Export */}
+      {isExportModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white border-2 border-slate-900 shadow-[8px_8px_0px_#0f172a] max-w-md w-full p-6">
             <div className="flex items-center justify-between border-b-2 border-slate-200 pb-3 mb-4">
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2 italic">
-                <FileText className="w-4 h-4 text-blue-600" />
+                <Download className="w-4 h-4 text-blue-600" />
                 Exportar Reporte de Producción
               </h3>
               <button
                 type="button"
-                onClick={() => setIsPdfModalOpen(false)}
+                onClick={() => setIsExportModalOpen(false)}
                 className="text-slate-400 hover:text-slate-700 p-1 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-
-            <p className="text-xs text-slate-600 mb-4 font-medium">
-              Antes de exportar el archivo, ingrese el nombre de la persona que emite el informe (figurará a modo de firma):
-            </p>
 
             <form
               onSubmit={async (e) => {
@@ -793,36 +792,105 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({
                   alert('Por favor ingrese el nombre de quien emite el informe.');
                   return;
                 }
-                setIsGeneratingPDF(true);
+                setIsExporting(true);
                 try {
                   const plantaFiltroObj = plantas.find((p) => p.id === selectedPlanta);
                   const plantaFiltroNombre = selectedPlanta === 'TODAS'
                     ? 'Todas las Plantas'
                     : plantaFiltroObj ? `${plantaFiltroObj.interno} - ${plantaFiltroObj.marca}` : selectedPlanta;
 
-                  await exportProduccionPDF({
-                    groupedRecords: groupedAndSortedRecords,
-                    plantas,
-                    operadores,
-                    obras,
-                    motivos,
-                    capas,
-                    fechaDesde,
-                    fechaHasta,
-                    plantaFiltroNombre,
-                    emitterName: pdfEmitterName.trim(),
-                  });
+                  if (exportFormat === 'pdf') {
+                    await exportProduccionPDF({
+                      groupedRecords: groupedAndSortedRecords,
+                      plantas,
+                      operadores,
+                      obras,
+                      motivos,
+                      capas,
+                      fechaDesde,
+                      fechaHasta,
+                      plantaFiltroNombre,
+                      emitterName: pdfEmitterName.trim(),
+                    });
+                  } else {
+                    await exportProduccionExcel({
+                      groupedRecords: groupedAndSortedRecords,
+                      plantas,
+                      operadores,
+                      obras,
+                      motivos,
+                      capas,
+                      fechaDesde,
+                      fechaHasta,
+                      plantaFiltroNombre,
+                      emitterName: pdfEmitterName.trim(),
+                    });
+                  }
 
-                  setIsPdfModalOpen(false);
+                  setIsExportModalOpen(false);
                 } catch (err) {
-                  console.error('Error al generar PDF:', err);
-                  alert('Ocurrió un error al generar el archivo PDF.');
+                  console.error('Error al generar reporte:', err);
+                  alert('Ocurrió un error al generar el archivo.');
                 } finally {
-                  setIsGeneratingPDF(false);
+                  setIsExporting(false);
                 }
               }}
               className="space-y-4"
             >
+              {/* Format selection */}
+              <div>
+                <label className="block text-[11px] font-black uppercase text-slate-700 mb-2">
+                  Seleccione el Formato de Exportación *
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setExportFormat('pdf')}
+                    className={`p-3 border-2 text-left flex flex-col gap-1 transition-all cursor-pointer ${
+                      exportFormat === 'pdf'
+                        ? 'border-blue-600 bg-blue-50/70 text-blue-950 ring-1 ring-blue-600'
+                        : 'border-slate-200 hover:border-slate-300 bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-black text-xs uppercase">
+                        <FileText className="w-4 h-4 text-blue-600" />
+                        <span>PDF</span>
+                      </div>
+                      {exportFormat === 'pdf' && (
+                        <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-medium">
+                      Documento formal listo para impresión
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setExportFormat('excel')}
+                    className={`p-3 border-2 text-left flex flex-col gap-1 transition-all cursor-pointer ${
+                      exportFormat === 'excel'
+                        ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 ring-1 ring-emerald-600'
+                        : 'border-slate-200 hover:border-slate-300 bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-black text-xs uppercase">
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                        <span>Excel</span>
+                      </div>
+                      {exportFormat === 'excel' && (
+                        <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-medium">
+                      Planilla de cálculo (.xlsx) editable
+                    </span>
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-[11px] font-black uppercase text-slate-700 mb-1">
                   Nombre de quien emite el informe *
@@ -840,25 +908,33 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setIsPdfModalOpen(false)}
+                  onClick={() => setIsExportModalOpen(false)}
                   className="px-4 py-2 border-2 border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-100 cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={isGeneratingPDF}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  disabled={isExporting}
+                  className={`px-5 py-2.5 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 cursor-pointer disabled:opacity-50 transition-all ${
+                    exportFormat === 'pdf'
+                      ? 'bg-blue-600 hover:bg-blue-700 shadow-[2px_2px_0px_#0f172a]'
+                      : 'bg-emerald-600 hover:bg-emerald-700 shadow-[2px_2px_0px_#0f172a]'
+                  }`}
                 >
-                  {isGeneratingPDF ? (
+                  {isExporting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Generando PDF...</span>
+                      <span>Generando {exportFormat === 'pdf' ? 'PDF' : 'Excel'}...</span>
                     </>
                   ) : (
                     <>
-                      <Download className="w-4 h-4" />
-                      <span>Generar e Imprimir PDF</span>
+                      {exportFormat === 'pdf' ? (
+                        <Download className="w-4 h-4" />
+                      ) : (
+                        <FileSpreadsheet className="w-4 h-4" />
+                      )}
+                      <span>Descargar {exportFormat === 'pdf' ? 'PDF' : 'Excel (.xlsx)'}</span>
                     </>
                   )}
                 </button>
